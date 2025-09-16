@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>ResQ 112 - Geo-Fence Authority</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body{font-family:'Inter',sans-serif;background:#0a0a1a;color:#e0e0e0;overflow:hidden; height:100vh; display: flex;}
+  #ripple-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+  .content-overlay{position:relative;z-index:2;width:100%;height:100%;background:radial-gradient(circle,rgba(10,10,26,0.85),#0a0a1a 90%);backdrop-filter:blur(4px); display: flex; padding: 20px; gap: 20px;}
+  
+  /* Sidebar and Panels */
+  #sidebar {
+    width: 350px;
+    flex-shrink: 0;
+    background:rgba(255,255,255,0.05);
+    backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.1);
+    padding: 20px;
+    border-radius:16px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  #sidebar h2 { text-align:center; margin:0 0 10px 0; font-weight:700; font-size: 1.5rem; color: #00ffff; text-shadow: 0 0 8px #00ffff;}
+  .panel { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 12px; box-shadow: inset 0 1px 4px rgba(0,0,0,0.2); }
+  .panel h3 { margin: 0 0 8px 0; font-size: 1rem; font-weight: 600; color: #00ffff; border-bottom: 1px solid rgba(0,255,255,0.2); padding-bottom: 5px;}
+  
+  /* Buttons & Toggles */
+  .glow-button{width: 100%; display:inline-block;padding:10px 20px;border-radius:8px;background:#00aaff;color:black;font-weight:600;text-align:center;transition:all .3s ease; border: 1px solid #00aaff; cursor: pointer;}
+  .glow-button:hover{box-shadow:0 0 10px #00ffff,0 0 25px #00ffff; background: #00cfff; border-color: #00cfff;}
+  .save-button { background: #22c55e; border-color: #22c55e; } /* Green for save */
+  .nav-button { background: rgba(0, 255, 255, 0.1); border-color: rgba(0, 255, 255, 0.3); color: white;}
+  .popup-delete-btn { background-color: #ef4444; color: white; padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; margin-top: 5px; }
+  .theme-toggle-label { display:flex; align-items:center; justify-content:space-between; cursor:pointer; background:rgba(0,0,0,0.3); padding: 8px; border-radius: 8px;}
+  .theme-toggle-label .ball { background-color: white; border-radius: 50%; width: 22px; height: 22px; transition: transform 0.2s linear; }
+  .theme-toggle-checkbox:checked + .theme-toggle-label .ball { transform: translateX(24px); }
+  .theme-toggle-checkbox { opacity: 0; width: 0; height: 0; }
+  .theme-toggle-container { background: #334155; border-radius: 50px; display: inline-block; width: 50px; height: 26px; position: relative; padding: 2px; }
+
+  /* Map */
+  #map-container{flex:1;}
+  #map{width:100%;height:100%;border-radius:16px;border:2px solid rgba(0,255,255,0.2);}
+
+  /* Leaflet Draw Dark Theme Override */
+  .leaflet-draw-toolbar { background-color: rgba(15, 23, 42, 0.8); border: 1px solid #00ffff; box-shadow: 0 0 10px #00ffff; }
+  .leaflet-draw-toolbar a { background-color: rgba(30, 41, 59, 0.8); color: #e0e0e0; }
+  .leaflet-draw-toolbar a:hover { background-color: rgba(51, 65, 85, 0.9); }
+  
+  /* ===== NEW RESPONSIVE STYLES ===== */
+  @media (max-width: 800px) {
+    .content-overlay {
+        flex-direction: column; /* Stack sidebar on top of map */
+        padding: 10px;
+        gap: 10px;
+    }
+    #sidebar {
+        width: 100%; /* Full width on mobile */
+        height: auto;
+        max-height: 45vh; /* Limit sidebar height */
+        overflow-y: auto; /* Make sidebar scrollable if content overflows */
+    }
+    #map-container {
+        flex-grow: 1; /* Ensure map takes all remaining vertical space */
+    }
+  }
+</style>
+</head>
+<body>
+<canvas id="ripple-canvas"></canvas>
+<div class="content-overlay">
+  <div id="sidebar">
+    <h2>Geo-Fence Admin</h2>
+    <div class="grid grid-cols-2 gap-2">
+        <button id="drawPolygonBtn" class="glow-button">Draw Polygon</button>
+        <button id="drawCircleBtn" class="glow-button">Draw Circle</button>
+    </div>
+    <button id="saveZonesBtn" class="glow-button save-button">Save All Zones</button>
+    
+    <div class="panel">
+        <input type="checkbox" id="theme-toggle" class="theme-toggle-checkbox">
+        <label for="theme-toggle" class="theme-toggle-label">
+            <span class="font-semibold">Map Theme</span>
+            <div class="theme-toggle-container"><div class="ball"></div></div>
+        </label>
+    </div>
+    
+    <div id="touristList" class="panel"><h3>Tourists</h3></div>
+    <div id="notifications" class="panel"><h3>Notifications</h3></div>
+
+    <div class="mt-auto pt-4 border-t border-cyan-500/20 space-y-3">
+        <a href="emergencies.html" class="glow-button nav-button">View Live Emergencies</a>
+        <a href="view-incidents.html" class="glow-button nav-button">View Reported Incidents</a>
+    </div>
+  </div>
+
+  <div id="map-container">
+    <div id="map"></div>
+  </div>
+</div>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, set, remove, onValue, push, update } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAzwiwp0ByoUkofWPJG1Ux8BY8ueCDwVjM",
+  authDomain: "geo-fencing-202f9.firebaseapp.com",
+  databaseURL: "https://geo-fencing-202f9-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "geo-fencing-202f9",
+  storageBucket: "geo-fencing-202f9.firebasestorage.app",
+  messagingSenderId: "815479242725",
+  appId: "1:815479242725:web:0eaae779912a495b94f90c",
+  measurementId: "G-WB7LFFPT4D"
+};
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// --- Map & Layers Initialization ---
+const map = L.map('map').setView([20.5937, 78.9629], 5);
+const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: 'CARTO' });
+const lightLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: 'OpenStreetMap' });
+darkLayer.addTo(map);
+
+const drawnItems = new L.FeatureGroup().addTo(map);
+let zoneLayers = {}; // Store layers by Firebase key: { "-Mkey...": L.Layer, ... }
+let touristMarkers = {};
+let markerStates = {};
+
+// --- UI Elements ---
+const drawPolygonBtn = document.getElementById('drawPolygonBtn');
+const drawCircleBtn = document.getElementById('drawCircleBtn');
+const saveZonesBtn = document.getElementById('saveZonesBtn');
+const themeToggle = document.getElementById('theme-toggle');
+
+// --- Map Theme Toggle Logic ---
+themeToggle.addEventListener('change', () => {
+    if (themeToggle.checked) {
+        map.removeLayer(darkLayer);
+        lightLayer.addTo(map);
+    } else {
+        map.removeLayer(lightLayer);
+        darkLayer.addTo(map);
+    }
+});
+
+// --- Leaflet Draw Initialization ---
+const drawControl = new L.Control.Draw({
+    draw: {
+        polygon: { shapeOptions: { color: '#00ffff' } },
+        circle: { shapeOptions: { color: '#00ffff' } },
+        rectangle: false, marker: false, polyline: false, circlemarker: false
+    },
+    edit: { featureGroup: drawnItems }
+});
+map.addControl(drawControl);
+
+drawPolygonBtn.onclick = () => new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
+drawCircleBtn.onclick = () => new L.Draw.Circle(map, drawControl.options.draw.circle).enable();
+
+// --- Save All Zones Logic ---
+saveZonesBtn.onclick = () => {
+    const updates = {};
+    for (const layerId in zoneLayers) {
+        const layer = zoneLayers[layerId];
+        let zoneData;
+        if (layer instanceof L.Circle) {
+            const center = layer.getLatLng();
+            zoneData = { type: 'circle', center: { lat: center.lat, lng: center.lng }, radius: layer.getRadius() };
+        } else { // Polygon
+            const points = layer.getLatLngs()[0].map(p => ({ lat: p.lat, lng: p.lng }));
+            zoneData = { type: 'polygon', points: points };
+        }
+        updates[layerId] = zoneData;
+    }
+    set(ref(db, 'zones'), updates)
+      .then(() => alert("All zones saved successfully!"))
+      .catch(err => alert("Error saving zones: " + err.message));
+};
+
+// --- Multi-Zone Event Handling ---
+map.on(L.Draw.Event.CREATED, (e) => {
+    const layer = e.layer;
+    const tempId = `temp_${Date.now()}`; // Assign a temporary ID
+    layer._firebaseKey = tempId;
+    zoneLayers[tempId] = layer;
+    drawnItems.addLayer(layer);
+    addPopupToLayer(layer);
+});
+
+map.on(L.Draw.Event.EDITED, (e) => {
+    // This event fires when any layers in the group are edited.
+    // The explicit save button now handles persistence.
+    console.log("Zones edited locally. Click 'Save All Zones' to persist changes.");
+});
+
+function addPopupToLayer(layer) {
+    const key = layer._firebaseKey;
+    const container = L.DomUtil.create('div');
+    const idText = L.DomUtil.create('span', '', container);
+    idText.innerHTML = `<b>Zone ID:</b> ${key.startsWith('temp_') ? 'Unsaved' : key}`;
+    const deleteBtn = L.DomUtil.create('button', 'popup-delete-btn', container);
+    deleteBtn.innerHTML = 'Delete Zone';
+    
+    L.DomEvent.on(deleteBtn, 'click', () => {
+        if (!key.startsWith('temp_')) { // If it's a saved zone
+            remove(ref(db, `zones/${key}`)); // Remove from Firebase
+        }
+        // Always remove from map immediately
+        drawnItems.removeLayer(layer);
+        delete zoneLayers[key];
+        map.closePopup();
+    });
+    
+    layer.bindPopup(container).openPopup();
+}
+
+// --- Firebase Data Synchronization ---
+onValue(ref(db, 'zones'), (snapshot) => {
+    const zonesFromDb = snapshot.val() || {};
+    
+    // Remove layers that are no longer in Firebase
+    for (const layerId in zoneLayers) {
+        if (!zonesFromDb[layerId]) {
+            drawnItems.removeLayer(zoneLayers[layerId]);
+            delete zoneLayers[layerId];
+        }
+    }
+
+    // Add or update layers from Firebase data
+    for (const zoneId in zonesFromDb) {
+        const z = zonesFromDb[zoneId];
+        let layer = zoneLayers[zoneId];
+
+        if (!layer) { // If layer doesn't exist, create it
+            if (z.type === 'circle') {
+                layer = L.circle([z.center.lat, z.center.lng], { radius: z.radius, color: '#00ffff' });
+            } else if (z.type === 'polygon') {
+                layer = L.polygon(z.points.map(p => [p.lat, p.lng]), { color: '#00ffff' });
+            }
+            layer._firebaseKey = zoneId;
+            zoneLayers[zoneId] = layer;
+            drawnItems.addLayer(layer);
+            addPopupToLayer(layer);
+        }
+    }
+    checkAllTourists();
+});
+
+// --- Tourist and Geofence Check Logic (Updated for Multi-Zone) ---
+function checkAllTourists() {
+    for (const id in touristMarkers) {
+        const t = touristMarkers[id].getLatLng();
+        checkInsideAnyZone(id, t.lat, t.lng);
+    }
+}
+
+function checkInsideAnyZone(touristId, lat, lng) {
+    let isInsideAnyZone = false;
+    for (const layerId in zoneLayers) {
+        const layer = zoneLayers[layerId];
+        let isInsideThisZone = false;
+        
+        if (layer instanceof L.Circle) {
+            const center = layer.getLatLng();
+            const dist = map.distance(center, L.latLng(lat, lng));
+            isInsideThisZone = dist <= layer.getRadius();
+        } else if (layer) { // Polygon
+            try {
+                const pt = turf.point([lng, lat]);
+                isInsideThisZone = turf.booleanPointInPolygon(pt, layer.toGeoJSON());
+            } catch (e) { /* Turf not loaded or error */ }
+        }
+        if (isInsideThisZone) {
+            isInsideAnyZone = true;
+            break; // No need to check other zones
+        }
+    }
+
+    // Notification and state update logic
+    const marker = touristMarkers[touristId];
+    if (!marker) return;
+    if (!markerStates[touristId]) markerStates[touristId] = { isOutside: !isInsideAnyZone };
+    
+    const wasOutside = markerStates[touristId].isOutside;
+    if (!isInsideAnyZone && !wasOutside) { // Just left
+        markerStates[touristId].isOutside = true;
+        addNotification(`⚠️ Tourist <span>${touristId}</span> left all zones!`);
+    } else if (isInsideAnyZone && wasOutside) { // Just re-entered
+        markerStates[touristId].isOutside = false;
+        addNotification(`✅ Tourist <span>${touristId}</span> entered a zone`);
+    }
+
+    const popupColor = isInsideAnyZone ? '#22c55e' : '#ef4444';
+    const popupText = isInsideAnyZone ? 'Inside a Zone' : 'Outside All Zones!';
+    marker.bindPopup(`<b>${touristId}</b><br><span style="color:${popupColor}">${popupText}</span>`);
+    updateTouristList();
+}
+
+onValue(ref(db, 'tourists'), (snapshot) => {
+    const data = snapshot.val() || {};
+    // ... (rest of tourist logic is largely the same, just calls checkInsideAnyZone)
+    for (const id in touristMarkers) {
+        if (!data[id]) {
+            map.removeLayer(touristMarkers[id]);
+            delete touristMarkers[id];
+            delete markerStates[id];
+        }
+    }
+    for (const id in data) {
+        const t = data[id];
+        const lat = t.latitude ?? t.lat;
+        const lng = t.longitude ?? t.lng;
+        if (typeof lat !== 'number' || typeof lng !== 'number') continue;
+        if (!touristMarkers[id]) {
+            touristMarkers[id] = L.marker([lat, lng]).addTo(map);
+        } else {
+            touristMarkers[id].setLatLng([lat, lng]);
+        }
+        checkInsideAnyZone(id, lat, lng);
+    }
+    updateTouristList();
+});
+
+// --- Utility Functions (unchanged, but might need slight adjustments) ---
+function updateTouristList() {
+  const list = document.getElementById('touristList');
+  list.innerHTML = "<h3>Tourists</h3>";
+  for (const id in touristMarkers) {
+    const st = markerStates[id] && markerStates[id].isOutside ? "outside" : "inside";
+    list.innerHTML += `<div class="touristItem"><span>${id}</span><span class="${st}">${st.toUpperCase()}</span></div>`;
+  }
+}
+function addNotification(msg) {
+  const notifBox = document.getElementById('notifications');
+  const existingHTML = notifBox.innerHTML;
+  notifBox.innerHTML = `<div class="notif">${msg}</div>` + existingHTML.replace('<h3>Notifications</h3>', '');
+}
+const turfScript = document.createElement('script');
+turfScript.src = 'https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js';
+document.head.appendChild(turfScript);
+
+// Ripple background effect
+const canvas=document.getElementById("ripple-canvas"),ctx=canvas.getContext("2d");
+canvas.width=innerWidth;canvas.height=innerHeight;
+let ripples=[];
+class Ripple{constructor(x,y){this.x=x;this.y=y;this.radius=0;this.alpha=1;}
+update(){this.radius+=1.5;this.alpha-=0.01;}
+draw(){ctx.beginPath();ctx.arc(this.x,this.y,this.radius,0,2*Math.PI);ctx.strokeStyle=`rgba(0,255,255,${this.alpha})`;ctx.stroke();}}
+function animate(){ctx.clearRect(0,0,canvas.width,canvas.height);
+ripples.forEach((r,i)=>{r.update();r.draw();if(r.alpha<=0)ripples.splice(i,1);});
+requestAnimationFrame(animate);}
+animate();
+addEventListener("mousemove",e=>ripples.push(new Ripple(e.clientX,e.clientY)));
+</script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+</body>
+</html>

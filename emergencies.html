@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>ResQ 112 - Emergencies</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;700;900&family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+  <style>
+    :root {
+        --bg-color: #000000;
+        --text-color: #e0e0e0;
+        --text-color-light: #fff;
+        --text-highlight-glow: #00ffff;
+        --card-bg: rgba(255,255,255,0.05);
+        --card-border: rgba(0,255,255,0.3);
+        --header-bg: rgba(0,0,0,0.3);
+        --primary-font: 'Exo 2', sans-serif;
+        --secondary-font: 'Space Grotesk', sans-serif;
+    }
+    body.light-theme {
+        --bg-color: #eaf2f8;
+        --text-color: #34495e;
+        --text-color-light: #1c2833;
+        --text-highlight-glow: #0056b3;
+        --card-bg: rgba(255,255,255,0.6);
+        --card-border: rgba(0, 86, 179, 0.4);
+        --header-bg: rgba(255,255,255,0.2);
+    }
+    body {
+        font-family: var(--secondary-font);
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.5s ease, color 0.5s ease;
+    }
+    header { background-color: var(--header-bg); }
+    .logo-container span {
+        font-family: var(--secondary-font);
+        color: var(--text-color-light);
+    }
+    h1, h2 { color: var(--text-color-light); }
+    .card { 
+      background: var(--card-bg); 
+      border:1px solid var(--card-border); 
+      border-radius:12px; 
+      padding:16px; 
+      margin-bottom:14px; 
+      transition:all .3s ease;
+    }
+    .card:hover { box-shadow:0 0 20px 6px var(--text-highlight-glow); }
+    .map-btn {
+      display:inline-block; margin-top:8px; padding:8px 14px; border-radius:8px;
+      background:rgba(0,255,255,0.15); color:var(--text-highlight-glow); font-weight:600;
+      text-decoration:none; transition:all .3s ease;
+    }
+    .map-btn:hover {
+      background:rgba(0,255,255,0.35);
+      box-shadow:0 0 15px var(--text-highlight-glow);
+    }
+    body.light-theme .map-btn { background: rgba(0, 86, 179, 0.15); }
+    body.light-theme .map-btn:hover { background: rgba(0, 86, 179, 0.3); }
+    #theme-switcher {
+        background: none; border: 1px solid var(--card-border); border-radius: 50%; width: 40px; height: 40px;
+        cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 8px; color: var(--text-color-light);
+    }
+    .sun-icon { display: none; }
+    body.light-theme .moon-icon { display: none; }
+    body.light-theme .sun-icon { display: block; }
+  </style>
+  <script>
+    (function() {
+        const currentTheme = localStorage.getItem('theme');
+        if (currentTheme === 'light') { document.body.classList.add('light-theme'); }
+    })();
+  </script>
+</head>
+<body class="p-6">
+  <header class="fixed top-0 left-0 right-0 p-4 flex justify-between items-center z-10">
+    <div class="flex items-center space-x-4 logo-container">
+      <img src="logo.png.png" alt="logo" class="h-12 w-12"/>
+      <span class="text-2xl font-bold">ResQ 112</span>
+    </div>
+    <div class="flex items-center gap-4">
+        <a href="dashboard.html" class="text-white hover:text-cyan-300">Dashboard</a>
+        <button id="theme-switcher" title="Toggle theme">
+            <svg class="moon-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.25a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V3a.75.75 0 01.75-.75zM7.5 12a4.5 4.5 0 119 0 4.5 4.5 0 01-9 0zM18.894 6.106a.75.75 0 010 1.06l-1.591 1.59a.75.75 0 11-1.06-1.06l1.59-1.591a.75.75 0 011.06 0zM21.75 12a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5H21a.75.75 0 01.75.75zM17.894 17.894a.75.75 0 011.06 0l1.59 1.591a.75.75 0 11-1.06 1.06l-1.591-1.59a.75.75 0 010-1.06zM12 21a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0v-2.25A.75.75 0 0112 21zM5.106 17.894a.75.75 0 010-1.06l1.591-1.59a.75.75 0 111.06 1.06l-1.59 1.591a.75.75 0 01-1.06 0zM3 12a.75.75 0 01.75-.75h2.25a.75.75 0 010 1.5H3.75A.75.75 0 013 12zM6.106 5.106a.75.75 0 011.06 0l1.59 1.591a.75.75 0 11-1.06 1.06l-1.591-1.59a.75.75 0 010-1.06z"></path></svg>
+            <svg class="sun-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M9.528 1.718a.75.75 0 01.162.819A8.97 8.97 0 009 6a9 9 0 009 9 8.97 8.97 0 003.463-.69.75.75 0 01.981.98 10.503 10.503 0 01-9.694 6.46c-5.799 0-10.5-4.701-10.5-10.5 0-3.51 1.713-6.625 4.43-8.56a.75.75 0 01.818.162z" clip-rule="evenodd"></path></svg>
+        </button>
+    </div>
+  </header>
+
+  <main class="pt-24">
+    <h1 class="text-3xl font-bold mb-4">🚨 Active SOS Alerts</h1>
+    <ul id="activeList"><li>Loading...</li></ul>
+
+    <h1 class="text-3xl font-bold mt-8 mb-4">📁 Archived SOS Alerts</h1>
+    <ul id="archiveList"><li>Loading...</li></ul>
+  </main>
+
+<script>
+const themeSwitcher = document.getElementById('theme-switcher');
+themeSwitcher.addEventListener('click', () => {
+    document.body.classList.toggle('light-theme');
+    const currentTheme = document.body.classList.contains('light-theme') ? 'light' : 'dark';
+    localStorage.setItem('theme', currentTheme);
+});
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBcLtaRPt6hTo4aEFRvcBwNq5-00soEjB4", authDomain: "sos-c1499.firebaseapp.com",
+  databaseURL: "https://sos-c1499-default-rtdb.asia-southeast1.firebasedatabase.app", projectId: "sos-c1499",
+  storageBucket: "sos-c1499.firebasestorage.app", messagingSenderId: "1008729495848",
+  appId: "1:1008729495848:web:7d6c7d3a6047e2736e981d", measurementId: "G-JGBY3ZZPGC"
+};
+firebase.initializeApp(firebaseConfig);
+const db=firebase.database();
+
+function renderList(ref, containerId, isArchive=false){
+  db.ref(ref).on("value",snap=>{
+    const list=document.getElementById(containerId);
+    list.innerHTML="";
+    if(!snap.exists()){
+      list.innerHTML = "<li class='text-gray-500'>No entries found.</li>";
+      return;
+    }
+    snap.forEach(child=>{
+      const d=child.val();
+      const li=document.createElement("li");
+      li.className="card";
+      li.innerHTML=`
+        <div><b>Name:</b> ${d.name||"Unknown"}</div>
+        <div><b>ID:</b> ${d.userId||"—"}</div>
+        <div><b>Location:</b> ${d.lat}, ${d.lng}</div>
+        <div><b>Time:</b> ${d.timestamp ? new Date(d.timestamp).toLocaleString() : "—"}</div>
+        ${isArchive && d.stoppedAt ? `<div><b>Stopped:</b> ${new Date(d.stoppedAt).toLocaleString()}</div>` : ""}
+        <a class="map-btn" href="https://maps.google.com/?q=${d.lat},${d.lng}" target="_blank">Open in Google Maps</a>
+      `;
+      list.appendChild(li);
+    });
+  });
+}
+renderList("sos","activeList",false);
+renderList("archived_sos","archiveList",true);
+</script>
+</body>
+</html>

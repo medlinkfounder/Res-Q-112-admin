@@ -128,9 +128,10 @@ function renderList(ref, containerId, isArchive=false){
       const d=child.val();
       const li=document.createElement("li");
       li.className="card";
+      // **FIX:** Use d.name for the name, which is always present in the SOS record
       li.innerHTML=`
-        <div><b>Name:</b> ${d.name||"Unknown"}</div>
-        <div><b>ID:</b> ${d.userId||"—"}</div>
+        <div><b>Name:</b> ${d.name || "Unknown"}</div>
+        <div><b>ID:</b> ${d.userId || "—"}</div>
         <div><b>Location:</b> ${d.lat}, ${d.lng}</div>
         <div><b>Time:</b> ${d.timestamp ? new Date(d.timestamp).toLocaleString() : "—"}</div>
         ${isArchive && d.stoppedAt ? `<div><b>Stopped:</b> ${new Date(d.stoppedAt).toLocaleString()}</div>` : ""}

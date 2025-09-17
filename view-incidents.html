@@ -135,6 +135,10 @@ incidentsRef.on('value', (snapshot) => {
         let statusColor = 'text-yellow-400';
         if (data.status === 'Resolved') statusColor = 'text-green-400';
         if (data.status === 'In Progress') statusColor = 'text-blue-400';
+        
+        // **FIX:** Use data.user.name, which is always present in the incident record
+        const userName = data.user ? data.user.name : "Unknown";
+
         const cardHTML = `
             <div class="glass-card flex flex-col justify-between">
                 <div>
@@ -143,7 +147,7 @@ incidentsRef.on('value', (snapshot) => {
                         <span class="font-bold ${statusColor}">${data.status}</span>
                     </div>
                     <p class="text-sm text-gray-400 mb-2">
-                        ${translations[lang].reported_by} <b style="color: var(--text-color-light)">${data.user.name}</b>
+                        ${translations[lang].reported_by} <b style="color: var(--text-color-light)">${userName}</b>
                     </p>
                     <p class="mb-4 h-20 overflow-y-auto">${data.description}</p>
                     <p class="text-xs text-gray-500 font-mono">${data.ticketId}</p>
@@ -170,7 +174,7 @@ function updateLanguage(lang) {
         const key = el.getAttribute("data-i18n");
         if (translations[lang]?.[key]) { el.innerText = translations[lang][key]; }
     });
-    incidentsRef.trigger('value');
+    incidentsRef.trigger('value'); // Refresh list to update "Reported by" text
 }
 switcher.addEventListener("change", e => updateLanguage(e.target.value));
 window.addEventListener("load", () => {
